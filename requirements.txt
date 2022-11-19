@@ -1,0 +1,10 @@
+opencv_python
+tensorflow==2.9.0
+keras
+matplotlib
+numpy
+tensorflow-addons
+tf_keras_vis
+scikit-image
+progress
+lmdb
