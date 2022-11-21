@@ -146,6 +146,9 @@ if args.test:
                                                 use_existing_lmdb=args.use_existing_lmdb)
 i = 0
 
+if args.batch_size > 1:
+    print('use "--batch_size 1", not working yet with larger batches')
+    exit()
 
 def loss(output):
     # 1 is the imagenet index corresponding to Goldfish, 294 to Bear and 413 to Assault Rifle.
