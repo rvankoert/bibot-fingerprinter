@@ -65,6 +65,7 @@ parser.add_argument('--test', metavar='test ', type=str,
 parser.add_argument('--sauvola_window', metavar='sauvola_window ', type=int, default=11,
                     help='sauvola_window')
 parser.add_argument('--use_existing_lmdb', help='use_existing_lmdb', action='store_true')
+parser.add_argument('--center_zero', help='center_zero: beta, only implemented for cvl dataset', action='store_true')
 
 args = parser.parse_args()
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
@@ -142,33 +143,9 @@ testLabels = {}
 # split train/val:
 # shuf all.txt | split -l $(( $(wc -l <all.txt) * 80 / 100 )); mv xab val.txt; mv xaa train.txt
 
-if args.dataset == 'cvl':
-    training_generator, validation_generator, test_generator = DatasetCVL().generators(args.channels,
-                                                                                       args.do_binarize_otsu,
-                                                                                       args.do_binarize_sauvola)
-if args.dataset == 'iisg':
-    training_generator, validation_generator, test_generator = DatasetIISG().generators(args.channels, args.do_binarize_otsu,
-                                                                                                           args.do_binarize_sauvola)
-if args.dataset == 'ecodices':
-    training_generator, validation_generator, test_generator = DatasetEcodices().generators(args.channels, args.do_binarize_otsu,
-                                                                                                           args.do_binarize_sauvola)
-if args.dataset == 'medieval':
-    training_generator, validation_generator, test_generator = DatasetMedieval().generators(args.channels,args.do_binarize_otsu, args.do_binarize_sauvola)
-if args.dataset == 'medieval_small':
-    training_generator, validation_generator, test_generator = DatasetMedieval30Percent().generators(args.channels,
-                                                                                                     args.do_binarize_otsu,
-                                                                                                     args.do_binarize_sauvola)
-if args.dataset == 'medieval_small_sample':
-    training_generator, validation_generator, test_generator = DatasetMedieval30PercentSample().generators(args.channels,
-                                                                                                           args.do_binarize_otsu,
-                                                                                                           args.do_binarize_sauvola)
-
-if args.dataset == 'place_century_script':
-    training_generator, validation_generator, test_generator = DatasetPlaceCenturyScript().generators(args.channels,
-                                                                                                      args.do_binarize_otsu, args.do_binarize_sauvola)
-
 if args.train:
-    training_generator = DatasetGeneric().generator(args.train,
+    training_generator = DatasetGeneric().generator(imgSize,
+                                                    args.train,
                                                     batch_size=args.batch_size,
                                                     channels=args.channels,
                                                     do_binarize_otsu=args.do_binarize_otsu,
@@ -179,7 +156,8 @@ if args.train:
                                                     use_existing_lmdb=args.use_existing_lmdb)
 
 if args.val:
-    validation_generator = DatasetGeneric().generator(args.val,
+    validation_generator = DatasetGeneric().generator(imgSize,
+                                                      args.val,
                                                       batch_size=args.batch_size,
                                                       channels=args.channels,
                                                       do_binarize_otsu=args.do_binarize_otsu,
@@ -190,7 +168,8 @@ if args.val:
                                                       use_existing_lmdb=args.use_existing_lmdb)
 
 if args.test:
-    test_generator = DatasetGeneric().generator(args.test,
+    test_generator = DatasetGeneric().generator(imgSize,
+                                                args.test,
                                                 batch_size=args.batch_size,
                                                 channels=args.channels,
                                                 do_binarize_otsu=args.do_binarize_otsu,
@@ -233,6 +212,8 @@ def visualize_filter(filter_index, channels):
     img = utils.deprocess_image(img[0].numpy())
     return loss, img
 
+def normalize_data(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
 
 # 1 3 5 6
 for layerId in range(len(submodel.layers)):
@@ -263,7 +244,7 @@ for layerId in range(len(submodel.layers)):
         img1 = tf.keras.preprocessing.image.array_to_img(K.squeeze(X[0][0], axis=-0))
 
         maps = utils.get_feature_maps(submodel, layerId, img1)
-
+        maps = (np.rint(normalize_data(maps) * 255)).astype(int)
         fig = plt.figure(figsize=(40, numFilters * 2))
         columns = 2
         rows = numFilters
@@ -283,10 +264,10 @@ for layerId in range(len(submodel.layers)):
             # ax[-1].set_title("ax:" + str(j))  # set title
             if args.channels == 1:
                 maps[j - 1] = tf.squeeze(maps[j - 1])
+            maps[j - 1] = np.clip(maps[j - 1], 0, 255)
             plt.imshow(maps[j - 1], cmap='gray')
 
         # plt.show()  # finally, render the plot
-
         # plt.show()
         plt.tight_layout()
         plt.savefig('results/{}-{}.png'.format(layer.name, i))
